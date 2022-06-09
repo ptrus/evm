@@ -437,6 +437,7 @@ fn eval_return(state: &mut Machine, _opcode: Opcode, _position: usize) -> Contro
 }
 
 fn eval_revert(state: &mut Machine, _opcode: Opcode, _position: usize) -> Control {
+	println!("hi: EVAL Reverted :/");
 	self::misc::revert(state)
 }
 

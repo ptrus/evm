@@ -441,8 +441,10 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 
 					Control::Continue
 				}
-				ExitReason::Error(_) => {
+				ExitReason::Error(e) => {
 					push_u256!(runtime, U256::zero());
+
+					println!("IM HERE Losing the info about out of gas: {:?}", e);
 
 					Control::Continue
 				}

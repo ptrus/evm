@@ -385,7 +385,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	) -> Result<(), ExitError> {
 		let transaction_cost = gasometer::create_transaction_cost(init_code, access_list);
 		let gasometer = &mut self.state.metadata_mut().gasometer;
-		gasometer.record_transaction(transaction_cost)
+		let res = gasometer.record_transaction(transaction_cost);
+		println!("hi: record_create_transaction_cost: {:?}", res);
+
+		res
 	}
 
 	/// Execute a `CREATE` transaction.
@@ -397,6 +400,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> ExitReason {
+		println!("hi: AAAAAAAAAAAAAAAAAAAAA transact_Create2");
 		event!(TransactCreate {
 			caller,
 			value,
@@ -406,11 +410,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		});
 
 		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
+			println!("hi: Transact create RECORD CREATE res: {:?}", e);
 			return emit_exit!(e.into());
 		}
 		self.initialize_with_access_list(access_list);
 
-		match self.create_inner(
+		let res = match self.create_inner(
 			caller,
 			CreateScheme::Legacy { caller },
 			value,
@@ -420,7 +425,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		) {
 			Capture::Exit((s, _, _)) => emit_exit!(s),
 			Capture::Trap(_) => unreachable!(),
-		}
+		};
+		println!("hi: transact create inner res: {:?}", res);
+
+		res
 	}
 
 	/// Execute a `CREATE2` transaction.
@@ -433,6 +441,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> ExitReason {
+		println!("hi: AAAAAAAAAAAAAAAAAAAAA transact_Create2");
 		let code_hash = H256::from_slice(Keccak256::digest(&init_code).as_slice());
 		event!(TransactCreate2 {
 			caller,
@@ -448,11 +457,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		});
 
 		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
+			println!("hi: Transact create 2 RECORD CREATE res: {:?}", e);
 			return emit_exit!(e.into());
 		}
 		self.initialize_with_access_list(access_list);
 
-		match self.create_inner(
+		let res = match self.create_inner(
 			caller,
 			CreateScheme::Create2 {
 				caller,
@@ -466,7 +476,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		) {
 			Capture::Exit((s, _, _)) => emit_exit!(s),
 			Capture::Trap(_) => unreachable!(),
-		}
+		};
+		println!("hi: Transact create 2 inner res: {:?}", res);
+
+		res
 	}
 
 	/// Execute a `CALL` transaction with a given caller, address, value and
@@ -484,6 +497,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>,
 	) -> (ExitReason, Vec<u8>) {
+		println!("hi: Transact call!!");
 		event!(TransactCall {
 			caller,
 			address,
@@ -496,7 +510,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let gasometer = &mut self.state.metadata_mut().gasometer;
 		match gasometer.record_transaction(transaction_cost) {
 			Ok(()) => (),
-			Err(e) => return emit_exit!(e.into(), Vec::new()),
+			Err(e) => {
+				println!("hi: Transact call error here!!!: {:?}", e);
+				return emit_exit!(e.into(), Vec::new());
+			}
 		}
 
 		// Initialize initial addresses for EIP-2929
@@ -507,6 +524,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			self.initialize_with_access_list(access_list);
 		}
 
+		println!("hi: Transact call bout to inc nonce");
 		self.state.inc_nonce(caller);
 
 		let context = Context {
@@ -515,7 +533,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			apparent_value: value,
 		};
 
-		match self.call_inner(
+		println!("hi: Transact call inner");
+		let res = match self.call_inner(
 			address,
 			Some(Transfer {
 				source: caller,
@@ -531,7 +550,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		) {
 			Capture::Exit((s, v)) => emit_exit!(s, v),
 			Capture::Trap(_) => unreachable!(),
-		}
+		};
+		println!("hi: Transact call inner res: {:?}", res);
+
+		res
 	}
 
 	/// Get used gas for the current executor, given the price.
@@ -599,6 +621,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		target_gas: Option<u64>,
 		take_l64: bool,
 	) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Infallible> {
+		println!("hi: in create_inner");
 		macro_rules! try_or_fail {
 			( $e:expr ) => {
 				match $e {
@@ -645,6 +668,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()));
 		}
 
+		println!("hi: take_l64: {:?}", take_l64);
 		let after_gas = if take_l64 && self.config.call_l64_after_gas {
 			if self.config.estimate {
 				let initial_after_gas = self.state.metadata().gasometer.gas();
@@ -664,6 +688,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		try_or_fail!(self.state.metadata_mut().gasometer.record_cost(gas_limit));
 
 		self.state.inc_nonce(caller);
+		println!("hi: enter substrate");
 
 		self.enter_substate(gas_limit, false);
 
@@ -694,6 +719,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		match self.state.transfer(transfer) {
 			Ok(()) => (),
 			Err(e) => {
+				println!("hi: Reverted transfer here: {:?}", e);
 				let _ = self.exit_substate(StackExitKind::Reverted);
 				return Capture::Exit((ExitReason::Error(e), None, Vec::new()));
 			}
@@ -712,6 +738,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		let reason = self.execute(&mut runtime);
 		log::debug!(target: "evm", "Create execution using address {}: {:?}", address, reason);
+
+		println!("hi: executed: address: {}: {:?}", address, reason);
 
 		match reason {
 			ExitReason::Succeed(s) => {
@@ -749,6 +777,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 						Capture::Exit((ExitReason::Succeed(s), Some(address), Vec::new()))
 					}
 					Err(e) => {
+						println!("hi: exit while record_deposit!: {:?}", e);
 						let _ = self.exit_substate(StackExitKind::Failed);
 						Capture::Exit((ExitReason::Error(e), None, Vec::new()))
 					}
@@ -760,6 +789,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				Capture::Exit((ExitReason::Error(e), None, Vec::new()))
 			}
 			ExitReason::Revert(e) => {
+				println!("hi: Reverted subcall: {:?}", e);
 				let _ = self.exit_substate(StackExitKind::Reverted);
 				Capture::Exit((
 					ExitReason::Revert(e),
@@ -787,6 +817,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		take_stipend: bool,
 		context: Context,
 	) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+		println!("hi: call inner");
 		macro_rules! try_or_fail {
 			( $e:expr ) => {
 				match $e {
@@ -808,6 +839,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			is_static,
 			context: &context,
 		});
+		println!("hi: call taking some gas...");
 
 		let after_gas = if take_l64 && self.config.call_l64_after_gas {
 			if self.config.estimate {
@@ -835,11 +867,13 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		let code = self.code(code_address);
 
+		println!("hi: etnering substrate");
 		self.enter_substate(gas_limit, is_static);
 		self.state.touch(context.address);
 
 		if let Some(depth) = self.state.metadata().depth {
 			if depth > self.config.call_stack_limit {
+				println!("hi: Reverted call_stack_limit:");
 				let _ = self.exit_substate(StackExitKind::Reverted);
 				return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
 			}
@@ -849,6 +883,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			match self.state.transfer(transfer) {
 				Ok(()) => (),
 				Err(e) => {
+					println!("hi: Reverted transfer22: :{:?}", e);
 					let _ = self.exit_substate(StackExitKind::Reverted);
 					return Capture::Exit((ExitReason::Error(e), Vec::new()));
 				}
@@ -894,6 +929,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 					cost,
 				}) => {
 					let _ = self.state.metadata_mut().gasometer.record_cost(cost);
+					println!("hi: Reverted precompile revert",);
 					let _ = self.exit_substate(StackExitKind::Reverted);
 					Capture::Exit((ExitReason::Revert(exit_status), output))
 				}
@@ -910,6 +946,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let reason = self.execute(&mut runtime);
 		log::debug!(target: "evm", "Call execution using address {}: {:?}", code_address, reason);
 
+		println!("hi: call execute reason: {:?}", reason);
+
 		match reason {
 			ExitReason::Succeed(s) => {
 				let _ = self.exit_substate(StackExitKind::Succeeded);
@@ -920,6 +958,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				Capture::Exit((ExitReason::Error(e), Vec::new()))
 			}
 			ExitReason::Revert(e) => {
+				println!("hi: Reverted execute reverted: {:?}", e);
 				let _ = self.exit_substate(StackExitKind::Reverted);
 				Capture::Exit((ExitReason::Revert(e), runtime.machine().return_value()))
 			}
@@ -1075,9 +1114,14 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		init_code: Vec<u8>,
 		target_gas: Option<u64>,
 	) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
+		println!("hi: entering create");
 		let capture = self.create_inner(caller, scheme, value, init_code, target_gas, true);
 
 		if let Capture::Exit((ref reason, _, ref return_value)) = capture {
+			println!(
+				"hi: existing call, reason: {:?}, return: {:?}",
+				reason, return_value
+			);
 			emit_exit!(reason, return_value);
 		}
 
@@ -1094,7 +1138,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		is_static: bool,
 		context: Context,
 	) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
-		self.call_inner(
+		println!("hi: entering call");
+		let capture = self.call_inner(
 			code_address,
 			transfer,
 			input,
@@ -1103,7 +1148,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 			true,
 			true,
 			context,
-		)
+		);
+		println!("hi: existing call, capture: {:?}", capture);
+		capture
 	}
 
 	#[cfg(feature = "tracing")]
